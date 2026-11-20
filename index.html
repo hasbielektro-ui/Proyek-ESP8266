@@ -3,85 +3,43 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Proyek ESP8266 — Hasbi</title>
+  <title>Monitoring Lingkungan ESP8266</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; background: #f5f7fa; color: #222; }
-    .card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 20px; }
-    .status-online { color: #15803d; font-weight: bold; }
-    .status-offline { color: #b91c1c; font-weight: bold; }
-    pre { background: #1e293b; color: #f8fafc; padding: 14px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+    body { font-family: Arial, sans-serif; max-width: 760px; margin: 32px auto; padding: 0 16px; background: #f1f5f9; color: #0f172a; }
+    .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+    .metric { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; }
+    .metric-label { font-size: 14px; color: #475569; margin-bottom: 6px; }
+    .metric-val { font-size: 26px; font-weight: bold; color: #0f172a; }
+    .online { color: #15803d; font-weight: bold; }
+    .offline { color: #b91c1c; font-weight: bold; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>Monitor Proyek ESP8266</h1>
-    <p>Status Broker Web: <span id="conn-status" class="status-offline">Menghubungkan...</span></p>
+    <h1>Monitoring Lingkungan ESP8266</h1>
+    <p>Status Broker Web: <span id="conn-status" class="offline">Menghubungkan...</span></p>
     <p>Status Perangkat: <strong id="device-status">Menunggu data...</strong></p>
-    <p>Nilai / Telemetri: <strong id="telemetry-value">-</strong></p>
     <p>Update Terakhir: <span id="last-update">-</span></p>
   </div>
 
   <div class="card">
-    <h2>Kode ESP8266 (MQTT)</h2>
-    <pre><code>#include &lt;ESP8266WiFi.h&gt;
-#include &lt;PubSubClient.h&gt;
-
-const char* ssid = "NAMA_WIFI";
-const char* password = "PASSWORD_WIFI";
-const char* mqtt_server = "broker.hivemq.com";
-const int mqtt_port = 1883;
-
-const char* TOPIC_STATUS = "hasbielektro-ui-2026/esp8266/status";
-const char* TOPIC_DATA   = "hasbielektro-ui-2026/esp8266/data";
-
-WiFiClient espClient;
-PubSubClient client(espClient);
-unsigned long lastSend = 0;
-int counter = 0;
-
-void setupWiFi() {
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  pinMode(LED_BUILTIN, OUTPUT);
-  while (WiFi.status() != WL_CONNECTED) {
-    digitalWrite(LED_BUILTIN, LOW);
-    delay(200);
-    digitalWrite(LED_BUILTIN, HIGH);
-    delay(200);
-  }
-  digitalWrite(LED_BUILTIN, LOW);
-}
-
-void reconnectMQTT() {
-  while (!client.connected()) {
-    String clientId = "ESP8266-" + String(random(0xffff), HEX);
-    if (client.connect(clientId.c_str())) {
-      client.publish(TOPIC_STATUS, "ONLINE (Charger HP)", true);
-    } else {
-      delay(2000);
-    }
-  }
-}
-
-void setup() {
-  setupWiFi();
-  client.setServer(mqtt_server, mqtt_port);
-}
-
-void loop() {
-  if (WiFi.status() != WL_CONNECTED) setupWiFi();
-  if (!client.connected()) reconnectMQTT();
-  client.loop();
-
-  if (millis() - lastSend &gt;= 5000) {
-    lastSend = millis();
-    counter++;
-    String payload = "Aktif #" + String(counter) + " | RSSI: " + String(WiFi.RSSI()) + " dBm";
-    client.publish(TOPIC_STATUS, "ONLINE (Charger HP)", true);
-    client.publish(TOPIC_DATA, payload.c_str(), true);
-  }
-}</code></pre>
+    <h2>Data Sensor Real-Time</h2>
+    <div class="grid">
+      <div class="metric">
+        <div class="metric-label">Suhu</div>
+        <div class="metric-val" id="suhu-val">- °C</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Kelembapan</div>
+        <div class="metric-val" id="lembab-val">- %</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Kebisingan (KY-037)</div>
+        <div class="metric-val" id="bising-val">- %</div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -93,7 +51,7 @@ void loop() {
     client.on("connect", () => {
       const el = document.getElementById("conn-status");
       el.textContent = "Terhubung";
-      el.className = "status-online";
+      el.className = "online";
       client.subscribe([TOPIC_STATUS, TOPIC_DATA]);
     });
 
@@ -104,7 +62,14 @@ void loop() {
       if (topic === TOPIC_STATUS) {
         document.getElementById("device-status").textContent = payload;
       } else if (topic === TOPIC_DATA) {
-        document.getElementById("telemetry-value").textContent = payload;
+        try {
+          const d = JSON.parse(payload);
+          document.getElementById("suhu-val").textContent = `${Number(d.suhu).toFixed(1)} °C`;
+          document.getElementById("lembab-val").textContent = `${Number(d.kelembapan).toFixed(1)} %`;
+          document.getElementById("bising-val").textContent = `${d.kebisingan} %`;
+        } catch (e) {
+          document.getElementById("suhu-val").textContent = payload;
+        }
       }
     });
   </script>
