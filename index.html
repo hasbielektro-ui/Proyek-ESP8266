@@ -1,1 +1,112 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Proyek ESP8266 — Hasbi</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; background: #f5f7fa; color: #222; }
+    .card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 20px; }
+    .status-online { color: #15803d; font-weight: bold; }
+    .status-offline { color: #b91c1c; font-weight: bold; }
+    pre { background: #1e293b; color: #f8fafc; padding: 14px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Monitor Proyek ESP8266</h1>
+    <p>Status Broker Web: <span id="conn-status" class="status-offline">Menghubungkan...</span></p>
+    <p>Status Perangkat: <strong id="device-status">Menunggu data...</strong></p>
+    <p>Nilai / Telemetri: <strong id="telemetry-value">-</strong></p>
+    <p>Update Terakhir: <span id="last-update">-</span></p>
+  </div>
 
+  <div class="card">
+    <h2>Kode ESP8266 (MQTT)</h2>
+    <pre><code>#include &lt;ESP8266WiFi.h&gt;
+#include &lt;PubSubClient.h&gt;
+
+const char* ssid = "NAMA_WIFI";
+const char* password = "PASSWORD_WIFI";
+const char* mqtt_server = "broker.hivemq.com";
+const int mqtt_port = 1883;
+
+const char* TOPIC_STATUS = "hasbielektro-ui-2026/esp8266/status";
+const char* TOPIC_DATA   = "hasbielektro-ui-2026/esp8266/data";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+unsigned long lastSend = 0;
+int counter = 0;
+
+void setupWiFi() {
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  pinMode(LED_BUILTIN, OUTPUT);
+  while (WiFi.status() != WL_CONNECTED) {
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(200);
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(200);
+  }
+  digitalWrite(LED_BUILTIN, LOW);
+}
+
+void reconnectMQTT() {
+  while (!client.connected()) {
+    String clientId = "ESP8266-" + String(random(0xffff), HEX);
+    if (client.connect(clientId.c_str())) {
+      client.publish(TOPIC_STATUS, "ONLINE (Charger HP)", true);
+    } else {
+      delay(2000);
+    }
+  }
+}
+
+void setup() {
+  setupWiFi();
+  client.setServer(mqtt_server, mqtt_port);
+}
+
+void loop() {
+  if (WiFi.status() != WL_CONNECTED) setupWiFi();
+  if (!client.connected()) reconnectMQTT();
+  client.loop();
+
+  if (millis() - lastSend &gt;= 5000) {
+    lastSend = millis();
+    counter++;
+    String payload = "Aktif #" + String(counter) + " | RSSI: " + String(WiFi.RSSI()) + " dBm";
+    client.publish(TOPIC_STATUS, "ONLINE (Charger HP)", true);
+    client.publish(TOPIC_DATA, payload.c_str(), true);
+  }
+}</code></pre>
+  </div>
+
+  <script>
+    const TOPIC_STATUS = "hasbielektro-ui-2026/esp8266/status";
+    const TOPIC_DATA   = "hasbielektro-ui-2026/esp8266/data";
+
+    const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
+
+    client.on("connect", () => {
+      const el = document.getElementById("conn-status");
+      el.textContent = "Terhubung";
+      el.className = "status-online";
+      client.subscribe([TOPIC_STATUS, TOPIC_DATA]);
+    });
+
+    client.on("message", (topic, message) => {
+      const payload = message.toString();
+      document.getElementById("last-update").textContent = new Date().toLocaleTimeString("id-ID");
+
+      if (topic === TOPIC_STATUS) {
+        document.getElementById("device-status").textContent = payload;
+      } else if (topic === TOPIC_DATA) {
+        document.getElementById("telemetry-value").textContent = payload;
+      }
+    });
+  </script>
+</body>
+</html>
