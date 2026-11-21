@@ -20,7 +20,7 @@
   <div class="card">
     <h1>Monitoring Lingkungan ESP8266</h1>
     <p>Status Broker Web: <span id="conn-status" class="offline">Menghubungkan...</span></p>
-    <p>Status Perangkat: <strong id="device-status">Menunggu data...</strong></p>
+    <p>Status Perangkat: <strong id="device-status" class="offline">Menunggu data...</strong></p>
     <p>Update Terakhir: <span id="last-update">-</span></p>
   </div>
 
@@ -36,8 +36,8 @@
         <div class="metric-val" id="lembab-val">- %</div>
       </div>
       <div class="metric">
-        <div class="metric-label">Kebisingan (KY-037)</div>
-        <div class="metric-val" id="bising-val">- %</div>
+        <div class="metric-label">Kebisingan (KY-037 - ADC)</div>
+        <div class="metric-val" id="bising-val">-</div>
       </div>
     </div>
   </div>
@@ -45,6 +45,16 @@
   <script>
     const TOPIC_STATUS = "hasbielektro-ui-2026/lingkungan/status";
     const TOPIC_DATA   = "hasbielektro-ui-2026/lingkungan/data";
+    const STALE_LIMIT_MS = 10000;
+
+    let lastPacketTime = 0;
+    let lastReportedStatus = "Menunggu data...";
+
+    function setDeviceStatusUI(text, isOnline) {
+      const el = document.getElementById("device-status");
+      el.textContent = text;
+      el.className = isOnline ? "online" : "offline";
+    }
 
     const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
 
@@ -57,21 +67,35 @@
 
     client.on("message", (topic, message) => {
       const payload = message.toString();
-      document.getElementById("last-update").textContent = new Date().toLocaleTimeString("id-ID");
+      const now = Date.now();
 
       if (topic === TOPIC_STATUS) {
-        document.getElementById("device-status").textContent = payload;
+        lastReportedStatus = payload;
+        const isOnline = payload.toUpperCase().startsWith("ONLINE");
+        if (isOnline) lastPacketTime = now;
+        setDeviceStatusUI(payload, isOnline);
       } else if (topic === TOPIC_DATA) {
+        lastPacketTime = now;
+        document.getElementById("last-update").textContent = new Date(now).toLocaleTimeString("id-ID");
+        if (lastReportedStatus.toUpperCase().startsWith("ONLINE")) {
+          setDeviceStatusUI(lastReportedStatus, true);
+        }
         try {
           const d = JSON.parse(payload);
           document.getElementById("suhu-val").textContent = `${Number(d.suhu).toFixed(1)} °C`;
           document.getElementById("lembab-val").textContent = `${Number(d.kelembapan).toFixed(1)} %`;
-          document.getElementById("bising-val").textContent = `${d.kebisingan} %`;
+          document.getElementById("bising-val").textContent = `${d.kebisingan}`;
         } catch (e) {
           document.getElementById("suhu-val").textContent = payload;
         }
       }
     });
+
+    setInterval(() => {
+      if (lastPacketTime > 0 && (Date.now() - lastPacketTime > STALE_LIMIT_MS)) {
+        setDeviceStatusUI("OFFLINE (Tidak ada data baru)", false);
+      }
+    }, 1000);
   </script>
 </body>
 </html>
