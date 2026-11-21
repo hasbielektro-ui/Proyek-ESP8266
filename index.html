@@ -23,7 +23,7 @@
     <p>Status Broker Web: <span id="conn-status" class="offline">Menghubungkan...</span></p>
     <p>Status Perangkat: <strong id="device-status" class="offline">Menunggu data...</strong></p>
     <p>Update Terakhir: <span id="last-update">-</span></p>
-    <div class="sub-note">Interval pembaruan perangkat: setiap 2 detik • Deteksi offline otomatis: 10 detik tanpa data</div>
+    <div class="sub-note">Interval pembaruan perangkat: setiap 1 detik • Deteksi offline otomatis: 5 detik tanpa data</div>
   </div>
 
   <div class="card">
@@ -47,7 +47,7 @@
   <script>
     const TOPIC_STATUS = "hasbielektro-ui-2026/lingkungan/status";
     const TOPIC_DATA   = "hasbielektro-ui-2026/lingkungan/data";
-    const STALE_LIMIT_MS = 10000;
+    const STALE_LIMIT_MS = 5000;
 
     let lastPacketTime = 0;
     let lastReportedStatus = "Menunggu data...";
