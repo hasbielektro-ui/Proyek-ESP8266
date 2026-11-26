@@ -83,9 +83,10 @@
       margin-bottom: 16px;
     }
 
+    /* Baris bawah dibagi 2 kolom sama besar untuk dua grafik */
     .grid-bottom {
       display: grid;
-      grid-template-columns: 1.5fr 1fr;
+      grid-template-columns: repeat(2, 1fr);
       gap: 16px;
     }
 
@@ -225,78 +226,8 @@
 
     .chart-box {
       position: relative;
-      height: 220px;
+      height: 230px;
       width: 100%;
-    }
-
-    .status-panel {
-      display: flex;
-      justify-content: space-around;
-      align-items: center;
-      margin: auto 0;
-      padding: 10px 0;
-    }
-
-    .indicator-box {
-      text-align: center;
-    }
-
-    .status-orb {
-      width: 72px;
-      height: 72px;
-      border-radius: 50%;
-      background-color: #cbd5e1;
-      margin: 0 auto 10px;
-      transition: all 0.3s ease;
-      border: 4px solid #f1f5f9;
-      box-shadow: inset 0 2px 6px rgba(0,0,0,0.15);
-    }
-
-    .status-orb.normal {
-      background-color: var(--accent-blue);
-      box-shadow: 0 0 18px rgba(14, 165, 233, 0.45);
-    }
-
-    .status-orb.high {
-      background-color: var(--accent-red);
-      animation: pulseRed 0.8s infinite;
-    }
-
-    .status-orb.low {
-      background-color: var(--accent-green);
-      animation: pulseGreen 0.8s infinite;
-    }
-
-    .status-orb.noisy {
-      background-color: var(--accent-amber);
-      animation: pulseAmber 0.8s infinite;
-    }
-
-    @keyframes pulseRed {
-      0%, 100% { box-shadow: 0 0 5px var(--accent-red); }
-      50% { box-shadow: 0 0 22px var(--accent-red); }
-    }
-
-    @keyframes pulseGreen {
-      0%, 100% { box-shadow: 0 0 5px var(--accent-green); }
-      50% { box-shadow: 0 0 22px var(--accent-green); }
-    }
-
-    @keyframes pulseAmber {
-      0%, 100% { box-shadow: 0 0 5px var(--accent-amber); }
-      50% { box-shadow: 0 0 22px var(--accent-amber); }
-    }
-
-    .status-label {
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--text-main);
-    }
-
-    .status-desc {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-top: 4px;
     }
 
     @media (max-width: 900px) {
@@ -320,6 +251,7 @@
   </nav>
 
   <div class="container">
+    <!-- Baris Atas: 4 Kartu Metrik -->
     <div class="grid-top">
       <div class="card">
         <div class="card-title">Ringkasan Parameter</div>
@@ -363,22 +295,19 @@
       </div>
     </div>
 
+    <!-- Baris Bawah: Dua Grafik Tren Sejajar -->
     <div class="grid-bottom">
       <div class="card">
-        <div class="card-title">Grafik Tren Kebisingan Real-Time (KY-037)</div>
+        <div class="card-title">Grafik Tren Suhu & Kelembaban Real-Time (DHT11)</div>
         <div class="chart-box">
-          <canvas id="noiseChart"></canvas>
+          <canvas id="envChart"></canvas>
         </div>
       </div>
 
       <div class="card">
-        <div class="card-title">Status Kondisi & Indikator Aktuator</div>
-        <div class="status-panel">
-          <div class="indicator-box">
-            <div id="statusOrb" class="status-orb"></div>
-            <div class="status-label" id="statusState">MENUNGGU DATA</div>
-            <div class="status-desc" id="statusDetail">Suhu Normal: 28°C - 40°C | Noise ≤ 50</div>
-          </div>
+        <div class="card-title">Grafik Tren Kebisingan Real-Time (KY-037)</div>
+        <div class="chart-box">
+          <canvas id="noiseChart"></canvas>
         </div>
       </div>
     </div>
@@ -389,12 +318,51 @@
     const topics = {
       temp:  'hasbielektro/ruangan/suhu',
       hum:   'hasbielektro/ruangan/kelembaban',
-      noise: 'hasbielektro/ruangan/kebisingan',
-      stat:  'hasbielektro/ruangan/status'
+      noise: 'hasbielektro/ruangan/kebisingan'
     };
 
-    const ctx = document.getElementById('noiseChart').getContext('2d');
-    const noiseChart = new Chart(ctx, {
+    // 1. Inisialisasi Grafik Suhu & Kelembaban
+    const envCtx = document.getElementById('envChart').getContext('2d');
+    const envChart = new Chart(envCtx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'Suhu (°C)',
+            borderColor: '#0ea5e9',
+            backgroundColor: 'rgba(14, 165, 233, 0.1)',
+            data: [],
+            tension: 0.3,
+            fill: true,
+            pointRadius: 3
+          },
+          {
+            label: 'Kelembaban (%)',
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            data: [],
+            tension: 0.3,
+            fill: true,
+            pointRadius: 3
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { beginAtZero: true, max: 100 }
+        },
+        plugins: {
+          legend: { position: 'top' }
+        }
+      }
+    });
+
+    // 2. Inisialisasi Grafik Kebisingan
+    const noiseCtx = document.getElementById('noiseChart').getContext('2d');
+    const noiseChart = new Chart(noiseCtx, {
       type: 'line',
       data: {
         labels: [],
@@ -431,9 +399,22 @@
       }
     });
 
+    function addEnvPoint(tempVal, humVal) {
+      const now = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      if (envChart.data.labels.length > 15) {
+        envChart.data.labels.shift();
+        envChart.data.datasets[0].data.shift();
+        envChart.data.datasets[1].data.shift();
+      }
+      envChart.data.labels.push(now);
+      envChart.data.datasets[0].data.push(tempVal);
+      envChart.data.datasets[1].data.push(humVal);
+      envChart.update('none');
+    }
+
     function addNoisePoint(noiseVal) {
       const now = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      if (noiseChart.data.labels.length > 20) {
+      if (noiseChart.data.labels.length > 15) {
         noiseChart.data.labels.shift();
         noiseChart.data.datasets[0].data.shift();
         noiseChart.data.datasets[1].data.shift();
@@ -443,6 +424,9 @@
       noiseChart.data.datasets[1].data.push(50);
       noiseChart.update('none');
     }
+
+    let lastTemp = null;
+    let lastHum = null;
 
     const clientId = 'web-dash-' + Math.random().toString(16).substring(2, 8);
     const client = mqtt.connect(brokerUrl, { clientId });
@@ -466,16 +450,20 @@
 
       if (topic === topics.temp) {
         const t = parseFloat(payload);
+        lastTemp = t;
         document.getElementById('valTempTop').textContent = t.toFixed(1) + ' °C';
         document.getElementById('gaugeText').textContent = t.toFixed(1) + ' °C';
 
         const clamped = Math.max(0, Math.min(50, t));
         const deg = -135 + (clamped / 50) * 180;
         document.getElementById('gaugeArc').style.transform = `rotate(${deg}deg)`;
+
+        if (lastHum !== null) addEnvPoint(lastTemp, lastHum);
       }
 
       if (topic === topics.hum) {
         const h = parseFloat(payload);
+        lastHum = h;
         document.getElementById('valHumTop').textContent = h.toFixed(1) + ' %';
         document.getElementById('tankText').textContent = Math.round(h) + '%';
         document.getElementById('tankFill').style.height = Math.max(0, Math.min(100, h)) + '%';
@@ -485,32 +473,6 @@
         const n = parseInt(payload, 10);
         document.getElementById('valNoise').textContent = n;
         if (!isNaN(n)) addNoisePoint(n);
-      }
-
-      if (topic === topics.stat) {
-        const orb = document.getElementById('statusOrb');
-        const stateEl = document.getElementById('statusState');
-        const detailEl = document.getElementById('statusDetail');
-
-        orb.className = 'status-orb';
-
-        if (payload === 'OVER') {
-          orb.classList.add('high');
-          stateEl.textContent = 'SUHU TERLALU TINGGI (OVER)';
-          detailEl.textContent = 'LED Merah (D5) Berkedip (> 40°C)';
-        } else if (payload === 'LOW') {
-          orb.classList.add('low');
-          stateEl.textContent = 'SUHU TERLALU RENDAH (LOW)';
-          detailEl.textContent = 'LED Hijau (D7) Berkedip (< 28°C)';
-        } else if (payload === 'NOISY') {
-          orb.classList.add('noisy');
-          stateEl.textContent = 'KEBISINGAN TINGGI (NOISY)';
-          detailEl.textContent = 'Buzzer (D8) Berbunyi (Noise > 50)';
-        } else {
-          orb.classList.add('normal');
-          stateEl.textContent = 'KONDISI NORMAL';
-          detailEl.textContent = 'Suhu: 28°C - 40°C | Noise ≤ 50';
-        }
       }
     });
   </script>
