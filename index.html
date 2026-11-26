@@ -382,7 +382,14 @@
         responsive: true,
         maintainAspectRatio: false,
         scales: { y: { beginAtZero: true, suggestedMax: 150 } },
-        plugins: { legend: { position: 'top' } }
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: {
+              filter: item => item.text !== 'Ambang Batas'
+            }
+          }
+        }
       }
     });
 
