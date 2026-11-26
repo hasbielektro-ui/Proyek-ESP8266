@@ -365,9 +365,9 @@
 
     <div class="grid-bottom">
       <div class="card">
-        <div class="card-title">Grafik Tren Suhu & Kelembaban Real-Time</div>
+        <div class="card-title">Grafik Tren Kebisingan Real-Time (KY-037)</div>
         <div class="chart-box">
-          <canvas id="envChart"></canvas>
+          <canvas id="noiseChart"></canvas>
         </div>
       </div>
 
@@ -393,53 +393,56 @@
       stat:  'hasbielektro/ruangan/status'
     };
 
-    const ctx = document.getElementById('envChart').getContext('2d');
-    const envChart = new Chart(ctx, {
+    const ctx = document.getElementById('noiseChart').getContext('2d');
+    const noiseChart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: [],
         datasets: [
           {
-            label: 'Suhu (°C)',
-            borderColor: '#0ea5e9',
-            backgroundColor: 'rgba(14, 165, 233, 0.1)',
+            label: 'Kebisingan (ADC)',
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.15)',
             data: [],
             tension: 0.3,
-            fill: true
+            fill: true,
+            pointRadius: 3
           },
           {
-            label: 'Kelembaban (%)',
-            borderColor: '#10b981',
-            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            label: 'Batas Buzzer (50)',
+            borderColor: '#ef4444',
+            borderDash: [5, 5],
+            borderWidth: 1.5,
             data: [],
-            tension: 0.3,
-            fill: true
+            pointRadius: 0,
+            fill: false
           }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        scales: { y: { beginAtZero: true, max: 100 } },
-        plugins: { legend: { position: 'top' } }
+        scales: {
+          y: { beginAtZero: true, suggestedMax: 150 }
+        },
+        plugins: {
+          legend: { position: 'top' }
+        }
       }
     });
 
-    function addChartPoint(tempVal, humVal) {
+    function addNoisePoint(noiseVal) {
       const now = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      if (envChart.data.labels.length > 15) {
-        envChart.data.labels.shift();
-        envChart.data.datasets[0].data.shift();
-        envChart.data.datasets[1].data.shift();
+      if (noiseChart.data.labels.length > 20) {
+        noiseChart.data.labels.shift();
+        noiseChart.data.datasets[0].data.shift();
+        noiseChart.data.datasets[1].data.shift();
       }
-      envChart.data.labels.push(now);
-      if (tempVal !== null) envChart.data.datasets[0].data.push(tempVal);
-      if (humVal !== null) envChart.data.datasets[1].data.push(humVal);
-      envChart.update('none');
+      noiseChart.data.labels.push(now);
+      noiseChart.data.datasets[0].data.push(noiseVal);
+      noiseChart.data.datasets[1].data.push(50);
+      noiseChart.update('none');
     }
-
-    let lastTemp = null;
-    let lastHum = null;
 
     const clientId = 'web-dash-' + Math.random().toString(16).substring(2, 8);
     const client = mqtt.connect(brokerUrl, { clientId });
@@ -463,27 +466,25 @@
 
       if (topic === topics.temp) {
         const t = parseFloat(payload);
-        lastTemp = t;
         document.getElementById('valTempTop').textContent = t.toFixed(1) + ' °C';
         document.getElementById('gaugeText').textContent = t.toFixed(1) + ' °C';
 
         const clamped = Math.max(0, Math.min(50, t));
         const deg = -135 + (clamped / 50) * 180;
         document.getElementById('gaugeArc').style.transform = `rotate(${deg}deg)`;
-
-        if (lastHum !== null) addChartPoint(lastTemp, lastHum);
       }
 
       if (topic === topics.hum) {
         const h = parseFloat(payload);
-        lastHum = h;
         document.getElementById('valHumTop').textContent = h.toFixed(1) + ' %';
         document.getElementById('tankText').textContent = Math.round(h) + '%';
         document.getElementById('tankFill').style.height = Math.max(0, Math.min(100, h)) + '%';
       }
 
       if (topic === topics.noise) {
-        document.getElementById('valNoise').textContent = payload;
+        const n = parseInt(payload, 10);
+        document.getElementById('valNoise').textContent = n;
+        if (!isNaN(n)) addNoisePoint(n);
       }
 
       if (topic === topics.stat) {
