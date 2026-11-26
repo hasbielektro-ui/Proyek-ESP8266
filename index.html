@@ -1,103 +1,529 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Monitoring Lingkungan ESP8266</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IoT Room Environment Dashboard</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 760px; margin: 32px auto; padding: 0 16px; background: #f1f5f9; color: #0f172a; }
-    .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 18px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
-    .metric { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; }
-    .metric-label { font-size: 14px; color: #475569; margin-bottom: 6px; }
-    .metric-val { font-size: 26px; font-weight: bold; color: #0f172a; }
-    .sub-note { font-size: 12px; color: #64748b; margin-top: 8px; }
-    .online { color: #15803d; font-weight: bold; }
-    .offline { color: #b91c1c; font-weight: bold; }
+    :root {
+      --bg-page: #f0f2f5;
+      --bg-card: #ffffff;
+      --header-bg: #1e293b;
+      --text-main: #334155;
+      --text-muted: #94a3b8;
+      --accent-green: #10b981;
+      --accent-blue: #0ea5e9;
+      --accent-red: #ef4444;
+      --border-color: #e2e8f0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-page);
+      color: var(--text-main);
+    }
+
+    /* Top Bar ala IoT Platform */
+    .navbar {
+      background-color: var(--header-bg);
+      color: #ffffff;
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    }
+
+    .navbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      font-size: 16px;
+      letter-spacing: 0.3px;
+    }
+
+    .conn-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      background: rgba(255,255,255,0.1);
+      padding: 6px 12px;
+      border-radius: 20px;
+    }
+
+    .conn-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--accent-red);
+    }
+
+    .conn-dot.online {
+      background-color: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+    }
+
+    /* Container Grid Utama */
+    .container {
+      max-width: 1200px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+
+    .grid-top {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .grid-bottom {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      padding: 18px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .card-title {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      margin-bottom: 14px;
+    }
+
+    /* Widget 1: Metric Stack (Kiri Atas di Gambar) */
+    .metric-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin: auto 0;
+    }
+
+    .metric-item {
+      border-left: 3px solid var(--accent-green);
+      padding-left: 12px;
+    }
+
+    .metric-val {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--accent-green);
+      line-height: 1.1;
+    }
+
+    .metric-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Widget 2: Single Big Metric */
+    .single-metric {
+      margin: auto 0;
+      text-align: center;
+    }
+
+    .single-metric .metric-val {
+      font-size: 38px;
+    }
+
+    /* Widget 3: Tank / Circle Fill (Tengah di Gambar) */
+    .tank-wrapper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: auto 0;
+    }
+
+    .tank-circle {
+      width: 115px;
+      height: 115px;
+      border-radius: 50%;
+      border: 3px solid #e2e8f0;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f8fafc;
+    }
+
+    .tank-fill {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 0%;
+      background: rgba(14, 165, 233, 0.75);
+      transition: height 0.6s ease;
+    }
+
+    .tank-text {
+      position: relative;
+      z-index: 2;
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    /* Widget 4: Semi-Circle Gauge (Kanan Atas di Gambar) */
+    .gauge-wrapper {
+      position: relative;
+      width: 160px;
+      height: 85px;
+      margin: 10px auto 0;
+      overflow: hidden;
+    }
+
+    .gauge-bg {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      border: 22px solid #e2e8f0;
+      border-bottom-color: transparent;
+      border-left-color: transparent;
+      transform: rotate(-135deg);
+    }
+
+    .gauge-arc {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      border: 22px solid var(--accent-blue);
+      border-bottom-color: transparent;
+      border-left-color: transparent;
+      transform: rotate(-135deg);
+      transition: transform 0.6s ease;
+    }
+
+    .gauge-value {
+      position: absolute;
+      bottom: 2px;
+      width: 100%;
+      text-align: center;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    /* Widget Bawah Kiri: Line Chart */
+    .chart-box {
+      position: relative;
+      height: 220px;
+      width: 100%;
+    }
+
+    /* Widget Bawah Kanan: Status Indicator LED & Buzzer (Kanan Bawah di Gambar) */
+    .status-panel {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      margin: auto 0;
+      padding: 10px 0;
+    }
+
+    .indicator-box {
+      text-align: center;
+    }
+
+    .status-orb {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background-color: #cbd5e1;
+      margin: 0 auto 10px;
+      transition: all 0.3s ease;
+      border: 4px solid #f1f5f9;
+      box-shadow: inset 0 2px 6px rgba(0,0,0,0.15);
+    }
+
+    .status-orb.normal {
+      background-color: var(--accent-green);
+      box-shadow: 0 0 18px rgba(16, 185, 129, 0.5);
+    }
+
+    .status-orb.over {
+      background-color: var(--accent-green);
+      animation: pulseGreen 0.8s infinite;
+    }
+
+    .status-orb.low {
+      background-color: var(--accent-red);
+      animation: pulseRed 0.8s infinite;
+    }
+
+    @keyframes pulseGreen {
+      0%, 100% { box-shadow: 0 0 5px var(--accent-green); }
+      50% { box-shadow: 0 0 22px var(--accent-green); }
+    }
+
+    @keyframes pulseRed {
+      0%, 100% { box-shadow: 0 0 5px var(--accent-red); }
+      50% { box-shadow: 0 0 22px var(--accent-red); }
+    }
+
+    .status-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .status-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    @media (max-width: 900px) {
+      .grid-top { grid-template-columns: repeat(2, 1fr); }
+      .grid-bottom { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 500px) {
+      .grid-top { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>Monitoring Lingkungan ESP8266</h1>
-    <p>Status Broker Web: <span id="conn-status" class="offline">Menghubungkan...</span></p>
-    <p>Status Perangkat: <strong id="device-status" class="offline">Menunggu data...</strong></p>
-    <p>Update Terakhir: <span id="last-update">-</span></p>
-    <div class="sub-note">Interval pembaruan perangkat: setiap 1 detik • Deteksi offline otomatis: 5 detik tanpa data</div>
-  </div>
 
-  <div class="card">
-    <h2>Data Sensor Real-Time</h2>
-    <div class="grid">
-      <div class="metric">
-        <div class="metric-label">Suhu</div>
-        <div class="metric-val" id="suhu-val">- °C</div>
+  <nav class="navbar">
+    <div class="navbar-brand">
+      <span>NodeMCU ESP8266 — Room Environment Monitor</span>
+    </div>
+    <div class="conn-badge">
+      <div id="connDot" class="conn-dot"></div>
+      <span id="connText">Menghubungkan Broker...</span>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- Baris Atas: 4 Widget ala Ubidots -->
+    <div class="grid-top">
+      <!-- Kartu 1: Ringkasan Angka Hijau -->
+      <div class="card">
+        <div class="card-title">Ringkasan Parameter</div>
+        <div class="metric-stack">
+          <div class="metric-item">
+            <div class="metric-val" id="valTempTop">--.- °C</div>
+            <div class="metric-sub">Suhu Ruangan (DHT11)</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-val" id="valHumTop">--.- %</div>
+            <div class="metric-sub">Kelembaban Relatif</div>
+          </div>
+        </div>
       </div>
-      <div class="metric">
-        <div class="metric-label">Kelembapan</div>
-        <div class="metric-val" id="lembab-val">- %</div>
+
+      <!-- Kartu 2: Nilai Kebisingan Besar -->
+      <div class="card">
+        <div class="card-title">Amplitudo Kebisingan</div>
+        <div class="single-metric">
+          <div class="metric-val" id="valNoise">---</div>
+          <div class="metric-sub">ADC Peak-to-Peak (KY-037)</div>
+        </div>
       </div>
-      <div class="metric">
-        <div class="metric-label">Kebisingan</div>
-        <div class="metric-val" id="bising-val">-</div>
+
+      <!-- Kartu 3: Indikator Tangki Kelembaban -->
+      <div class="card">
+        <div class="card-title">Level Kelembaban</div>
+        <div class="tank-wrapper">
+          <div class="tank-circle">
+            <div class="tank-fill" id="tankFill"></div>
+            <div class="tank-text" id="tankText">--%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Kartu 4: Gauge Setengah Lingkaran Suhu -->
+      <div class="card">
+        <div class="card-title">Gauge Suhu (0 - 50 °C)</div>
+        <div class="gauge-wrapper">
+          <div class="gauge-bg"></div>
+          <div class="gauge-arc" id="gaugeArc"></div>
+          <div class="gauge-value" id="gaugeText">--.- °C</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Baris Bawah: Grafik Real-Time & Indikator Status Aktuator -->
+    <div class="grid-bottom">
+      <div class="card">
+        <div class="card-title">Grafik Tren Suhu & Kelembaban Real-Time</div>
+        <div class="chart-box">
+          <canvas id="envChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Status Kondisi & Indikator Alarm</div>
+        <div class="status-panel">
+          <div class="indicator-box">
+            <div id="statusOrb" class="status-orb"></div>
+            <div class="status-label" id="statusState">MENUNGGU DATA</div>
+            <div class="status-desc" id="statusDetail">Batas Suhu: 20°C - 32°C | Lembab: 40% - 80%</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
-    const TOPIC_STATUS = "hasbielektro-ui-2026/lingkungan/status";
-    const TOPIC_DATA   = "hasbielektro-ui-2026/lingkungan/data";
-    const STALE_LIMIT_MS = 5000;
+    // Konfigurasi Broker MQTT HiveMQ (WebSocket Secure untuk GitHub Pages HTTPS)
+    const brokerUrl = 'wss://broker.hivemq.com:8884/mqtt';
+    const topics = {
+      temp:  'hasbielektro/ruangan/suhu',
+      hum:   'hasbielektro/ruangan/kelembaban',
+      noise: 'hasbielektro/ruangan/kebisingan',
+      stat:  'hasbielektro/ruangan/status'
+    };
 
-    let lastPacketTime = 0;
-    let lastReportedStatus = "Menunggu data...";
+    // Inisialisasi Grafik Garis (Chart.js)
+    const ctx = document.getElementById('envChart').getContext('2d');
+    const envChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'Suhu (°C)',
+            borderColor: '#0ea5e9',
+            backgroundColor: 'rgba(14, 165, 233, 0.1)',
+            data: [],
+            tension: 0.3,
+            fill: true
+          },
+          {
+            label: 'Kelembaban (%)',
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            data: [],
+            tension: 0.3,
+            fill: true
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { beginAtZero: true, max: 100 }
+        },
+        plugins: {
+          legend: { position: 'top' }
+        }
+      }
+    });
 
-    function setDeviceStatusUI(text, isOnline) {
-      const el = document.getElementById("device-status");
-      el.textContent = text;
-      el.className = isOnline ? "online" : "offline";
+    function addChartPoint(tempVal, humVal) {
+      const now = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      if (envChart.data.labels.length > 15) {
+        envChart.data.labels.shift();
+        envChart.data.datasets[0].data.shift();
+        envChart.data.datasets[1].data.shift();
+      }
+      envChart.data.labels.push(now);
+      if (tempVal !== null) envChart.data.datasets[0].data.push(tempVal);
+      if (humVal !== null) envChart.data.datasets[1].data.push(humVal);
+      envChart.update('none');
     }
 
-    const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
+    let lastTemp = null;
+    let lastHum = null;
 
-    client.on("connect", () => {
-      const el = document.getElementById("conn-status");
-      el.textContent = "Terhubung";
-      el.className = "online";
-      client.subscribe([TOPIC_STATUS, TOPIC_DATA]);
+    // Koneksi MQTT
+    const clientId = 'web-dash-' + Math.random().toString(16).substring(2, 8);
+    const client = mqtt.connect(brokerUrl, { clientId });
+
+    const connDot = document.getElementById('connDot');
+    const connText = document.getElementById('connText');
+
+    client.on('connect', () => {
+      connDot.classList.add('online');
+      connText.textContent = 'Terhubung (HiveMQ Live)';
+      Object.values(topics).forEach(t => client.subscribe(t));
     });
 
-    client.on("message", (topic, message) => {
+    client.on('offline', () => {
+      connDot.classList.remove('online');
+      connText.textContent = 'Terputus';
+    });
+
+    client.on('message', (topic, message) => {
       const payload = message.toString();
-      const now = Date.now();
 
-      if (topic === TOPIC_STATUS) {
-        lastReportedStatus = payload;
-        const isOnline = payload.toUpperCase().startsWith("ONLINE");
-        if (isOnline) lastPacketTime = now;
-        setDeviceStatusUI(payload, isOnline);
-      } else if (topic === TOPIC_DATA) {
-        lastPacketTime = now;
-        document.getElementById("last-update").textContent = new Date(now).toLocaleTimeString("id-ID");
-        if (lastReportedStatus.toUpperCase().startsWith("ONLINE")) {
-          setDeviceStatusUI(lastReportedStatus, true);
-        }
-        try {
-          const d = JSON.parse(payload);
-          document.getElementById("suhu-val").textContent = `${Number(d.suhu).toFixed(1)} °C`;
-          document.getElementById("lembab-val").textContent = `${Number(d.kelembapan).toFixed(1)} %`;
-          document.getElementById("bising-val").textContent = `${d.kebisingan}`;
-        } catch (e) {
-          document.getElementById("suhu-val").textContent = payload;
+      if (topic === topics.temp) {
+        const t = parseFloat(payload);
+        lastTemp = t;
+        document.getElementById('valTempTop').textContent = t.toFixed(1) + ' °C';
+        document.getElementById('gaugeText').textContent = t.toFixed(1) + ' °C';
+        
+        // Rotasi Gauge (-135deg = 0°C sampai +45deg = 50°C)
+        const clamped = Math.max(0, Math.min(50, t));
+        const deg = -135 + (clamped / 50) * 180;
+        document.getElementById('gaugeArc').style.transform = `rotate(${deg}deg)`;
+        
+        if (lastHum !== null) addChartPoint(lastTemp, lastHum);
+      }
+
+      if (topic === topics.hum) {
+        const h = parseFloat(payload);
+        lastHum = h;
+        document.getElementById('valHumTop').textContent = h.toFixed(1) + ' %';
+        document.getElementById('tankText').textContent = Math.round(h) + '%';
+        document.getElementById('tankFill').style.height = Math.max(0, Math.min(100, h)) + '%';
+      }
+
+      if (topic === topics.noise) {
+        document.getElementById('valNoise').textContent = payload;
+      }
+
+      if (topic === topics.stat) {
+        const orb = document.getElementById('statusOrb');
+        const stateEl = document.getElementById('statusState');
+        const detailEl = document.getElementById('statusDetail');
+
+        orb.className = 'status-orb'; // reset
+
+        if (payload === 'OVER') {
+          orb.classList.add('over');
+          stateEl.textContent = 'MELEBIHI AMBANG BATAS (OVER)';
+          detailEl.textContent = 'LED Hijau (D7) & Buzzer (D8) Aktif';
+        } else if (payload === 'LOW') {
+          orb.classList.add('low');
+          stateEl.textContent = 'DI BAWAH AMBANG BATAS (LOW)';
+          detailEl.textContent = 'LED Merah (D5) & Buzzer (D8) Aktif';
+        } else {
+          orb.classList.add('normal');
+          stateEl.textContent = 'KONDISI NORMAL';
+          detailEl.textContent = 'Semua Indikator Alarm Mati';
         }
       }
     });
-
-    setInterval(() => {
-      if (lastPacketTime > 0 && (Date.now() - lastPacketTime > STALE_LIMIT_MS)) {
-        setDeviceStatusUI("OFFLINE (Tidak ada data baru)", false);
-      }
-    }, 1000);
   </script>
 </body>
 </html>
