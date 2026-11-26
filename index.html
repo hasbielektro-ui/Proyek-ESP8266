@@ -457,7 +457,6 @@
       }
 
       clearTimeout(deviceTimeout);
-      // Jika ESP8266 dicabut dan tidak mengirim data selama 5 detik, anggap Terputus
       deviceTimeout = setTimeout(setDeviceOffline, 5000);
     }
 
@@ -466,13 +465,14 @@
 
     client.on('connect', () => {
       Object.values(topics).forEach(t => client.subscribe(t));
-      // Mulai timer pengecekan saat web pertama dibuka (kalau ESP mati, 5 detik kemudian langsung Terputus)
       deviceTimeout = setTimeout(setDeviceOffline, 5000);
     });
 
     client.on('offline', setDeviceOffline);
 
-    client.on('message', (topic, message) => {
+    client.on('message', (topic, message, packet) => {
+      if (packet.retain) return;
+
       const payload = message.toString();
       markDeviceActive();
 
