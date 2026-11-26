@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IoT Room Environment Dashboard</title>
+  <title>Monitoring Ruangan IoT</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
@@ -83,7 +83,6 @@
       margin-bottom: 16px;
     }
 
-    /* Baris bawah dibagi 2 kolom sama besar untuk dua grafik */
     .grid-bottom {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -243,22 +242,21 @@
 <body>
 
   <nav class="navbar">
-    <div class="navbar-brand">NodeMCU ESP8266 — Room Environment Monitor</div>
+    <div class="navbar-brand">Monitoring Suhu, Kelembaban & Kebisingan Ruangan</div>
     <div class="conn-badge">
       <div id="connDot" class="conn-dot"></div>
-      <span id="connText">Menghubungkan Broker...</span>
+      <span id="connText">Menghubungkan...</span>
     </div>
   </nav>
 
   <div class="container">
-    <!-- Baris Atas: 4 Kartu Metrik -->
     <div class="grid-top">
       <div class="card">
         <div class="card-title">Ringkasan Parameter</div>
         <div class="metric-stack">
           <div class="metric-item">
             <div class="metric-val" id="valTempTop">--.- °C</div>
-            <div class="metric-sub">Suhu Ruangan (DHT11)</div>
+            <div class="metric-sub">Suhu Ruangan</div>
           </div>
           <div class="metric-item">
             <div class="metric-val" id="valHumTop">--.- %</div>
@@ -271,7 +269,7 @@
         <div class="card-title">Amplitudo Kebisingan</div>
         <div class="single-metric">
           <div class="metric-val" id="valNoise">---</div>
-          <div class="metric-sub">ADC Peak-to-Peak (Batas: 50)</div>
+          <div class="metric-sub">ADC Peak-to-Peak</div>
         </div>
       </div>
 
@@ -286,7 +284,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title">Gauge Suhu (0 - 50 °C)</div>
+        <div class="card-title">Gauge Suhu</div>
         <div class="gauge-wrapper">
           <div class="gauge-bg"></div>
           <div class="gauge-arc" id="gaugeArc"></div>
@@ -295,17 +293,16 @@
       </div>
     </div>
 
-    <!-- Baris Bawah: Dua Grafik Tren Sejajar -->
     <div class="grid-bottom">
       <div class="card">
-        <div class="card-title">Grafik Tren Suhu & Kelembaban Real-Time (DHT11)</div>
+        <div class="card-title">Grafik Tren Suhu & Kelembaban Real-Time</div>
         <div class="chart-box">
           <canvas id="envChart"></canvas>
         </div>
       </div>
 
       <div class="card">
-        <div class="card-title">Grafik Tren Kebisingan Real-Time (KY-037)</div>
+        <div class="card-title">Grafik Tren Kebisingan Real-Time</div>
         <div class="chart-box">
           <canvas id="noiseChart"></canvas>
         </div>
@@ -321,7 +318,6 @@
       noise: 'hasbielektro/ruangan/kebisingan'
     };
 
-    // 1. Inisialisasi Grafik Suhu & Kelembaban
     const envCtx = document.getElementById('envChart').getContext('2d');
     const envChart = new Chart(envCtx, {
       type: 'line',
@@ -351,16 +347,11 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        scales: {
-          y: { beginAtZero: true, max: 100 }
-        },
-        plugins: {
-          legend: { position: 'top' }
-        }
+        scales: { y: { beginAtZero: true, max: 100 } },
+        plugins: { legend: { position: 'top' } }
       }
     });
 
-    // 2. Inisialisasi Grafik Kebisingan
     const noiseCtx = document.getElementById('noiseChart').getContext('2d');
     const noiseChart = new Chart(noiseCtx, {
       type: 'line',
@@ -368,7 +359,7 @@
         labels: [],
         datasets: [
           {
-            label: 'Kebisingan (ADC)',
+            label: 'Kebisingan',
             borderColor: '#f59e0b',
             backgroundColor: 'rgba(245, 158, 11, 0.15)',
             data: [],
@@ -377,7 +368,7 @@
             pointRadius: 3
           },
           {
-            label: 'Batas Buzzer (50)',
+            label: 'Ambang Batas',
             borderColor: '#ef4444',
             borderDash: [5, 5],
             borderWidth: 1.5,
@@ -390,12 +381,8 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        scales: {
-          y: { beginAtZero: true, suggestedMax: 150 }
-        },
-        plugins: {
-          legend: { position: 'top' }
-        }
+        scales: { y: { beginAtZero: true, suggestedMax: 150 } },
+        plugins: { legend: { position: 'top' } }
       }
     });
 
@@ -436,7 +423,7 @@
 
     client.on('connect', () => {
       connDot.classList.add('online');
-      connText.textContent = 'Terhubung (HiveMQ Live)';
+      connText.textContent = 'Terhubung';
       Object.values(topics).forEach(t => client.subscribe(t));
     });
 
