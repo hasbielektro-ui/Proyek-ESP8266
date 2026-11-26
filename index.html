@@ -58,6 +58,14 @@
       border-radius: 20px;
     }
 
+    .conn-time {
+      color: #cbd5e1;
+      font-weight: 600;
+      padding-right: 6px;
+      border-right: 1px solid rgba(255,255,255,0.2);
+      display: none;
+    }
+
     .conn-dot {
       width: 8px;
       height: 8px;
@@ -244,6 +252,7 @@
   <nav class="navbar">
     <div class="navbar-brand">Monitoring Suhu, Kelembaban & Kebisingan Ruangan</div>
     <div class="conn-badge">
+      <span id="connTime" class="conn-time"></span>
       <div id="connDot" class="conn-dot"></div>
       <span id="connText">Menghubungkan...</span>
     </div>
@@ -421,26 +430,51 @@
 
     let lastTemp = null;
     let lastHum = null;
+    let deviceTimeout = null;
+    let isDeviceOnline = false;
+
+    const connDot  = document.getElementById('connDot');
+    const connText = document.getElementById('connText');
+    const connTime = document.getElementById('connTime');
+
+    function setDeviceOffline() {
+      if (!isDeviceOnline && connText.textContent === 'Terputus') return;
+      isDeviceOnline = false;
+      connDot.classList.remove('online');
+      connText.textContent = 'Terputus';
+
+      const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+      connTime.textContent = timeStr;
+      connTime.style.display = 'inline';
+    }
+
+    function markDeviceActive() {
+      if (!isDeviceOnline) {
+        isDeviceOnline = true;
+        connDot.classList.add('online');
+        connText.textContent = 'Terhubung';
+        connTime.style.display = 'none';
+      }
+
+      clearTimeout(deviceTimeout);
+      // Jika ESP8266 dicabut dan tidak mengirim data selama 5 detik, anggap Terputus
+      deviceTimeout = setTimeout(setDeviceOffline, 5000);
+    }
 
     const clientId = 'web-dash-' + Math.random().toString(16).substring(2, 8);
     const client = mqtt.connect(brokerUrl, { clientId });
 
-    const connDot = document.getElementById('connDot');
-    const connText = document.getElementById('connText');
-
     client.on('connect', () => {
-      connDot.classList.add('online');
-      connText.textContent = 'Terhubung';
       Object.values(topics).forEach(t => client.subscribe(t));
+      // Mulai timer pengecekan saat web pertama dibuka (kalau ESP mati, 5 detik kemudian langsung Terputus)
+      deviceTimeout = setTimeout(setDeviceOffline, 5000);
     });
 
-    client.on('offline', () => {
-      connDot.classList.remove('online');
-      connText.textContent = 'Terputus';
-    });
+    client.on('offline', setDeviceOffline);
 
     client.on('message', (topic, message) => {
       const payload = message.toString();
+      markDeviceActive();
 
       if (topic === topics.temp) {
         const t = parseFloat(payload);
